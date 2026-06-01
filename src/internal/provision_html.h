@@ -508,6 +508,13 @@ static constexpr const char index_html3[] PROGMEM = R"rawliteral(;
       </form>
     </div>
     <footer id="footer">
+      <p class="copyright" id="savedlink" style="opacity: 0.5; display: none;">
+        <a
+          role="link"
+          style="color: inherit; -webkit-tap-highlight-color: transparent;"
+          href="javascript:showSavedNetworks()"
+          >Saved networks</a
+      </p>
       <p class="copyright" style="opacity: 0.5">
         <a
           role="link"
@@ -605,11 +612,187 @@ static constexpr const char index_html13[] PROGMEM =
           const resetLink = document.getElementById("factorylink");
           resetLink.style.display = "none";
         }
+
+        updateSavedLink();
       });
 
       window.addEventListener("load", (event) => {
         loadSSID();
       });
+
+      function updateSavedLink() {
+        fetch("/saved/list")
+          .then((response) => (response.ok ? response.json() : null))
+          .then((data) => {
+            const link = document.getElementById("savedlink");
+            if (!link) return;
+            const count = data && Array.isArray(data.networks)
+              ? data.networks.length
+              : 0;
+            link.style.display = count > 0 ? "" : "none";
+          })
+          .catch(() => {});
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function showSavedNetworks() {
+        const card = document.getElementById("main-card");
+        card.innerHTML = `
+          <div id="saved-networks">
+            <h3 style="padding-top: 0.5rem; margin: 0rem;">Saved networks</h3>
+            <p style="opacity: 0.6;">Tap a network to connect or remove it.</p>
+            <div id="saved-list" style="text-align: left; margin-top: 1rem;"></div>
+            <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1.5rem;">
+              <button
+                class="btn-process"
+                style="background-color: gray;"
+                onclick="window.location.href='/'"
+              >
+                Back
+              </button>
+              <button
+                class="btn-process"
+                onclick="clearSavedNetworks();"
+              >
+                Clear all
+              </button>
+            </div>
+            <p id="saved-error" class="error-message"></p>
+          </div>
+        `;
+
+        loadSavedNetworks();
+      }
+
+      function disableSavedControls(state) {
+        const buttons = document.querySelectorAll(".saved-action");
+        buttons.forEach((btn) => (btn.disabled = state));
+      }
+
+      function loadSavedNetworks() {
+        const list = document.getElementById("saved-list");
+        const error = document.getElementById("saved-error");
+
+        if (list) list.innerHTML = "Loading...";
+        if (error) error.textContent = "";
+
+        fetch("/saved/list")
+          .then((response) => {
+            if (!response.ok) throw new Error("Failed to load");
+            return response.json();
+          })
+          .then((data) => {
+            const networks = data && Array.isArray(data.networks)
+              ? data.networks
+              : [];
+            renderSavedNetworks(networks);
+            updateSavedLink();
+          })
+          .catch(() => {
+            if (list) list.innerHTML = "Could not load saved networks.";
+          });
+      }
+
+      function renderSavedNetworks(networks) {
+        const list = document.getElementById("saved-list");
+        if (!list) return;
+
+        if (!networks.length) {
+          list.innerHTML = "No saved networks.";
+          return;
+        }
+
+        list.innerHTML = networks
+          .map((ssid) => {
+            const safe = escapeHtml(ssid);
+            return `
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin: 0.5rem 0;">
+                <button
+                  class="icon_button saved-action"
+                  style="text-align: left; font-weight: 600;"
+                  onclick="connectSaved('${safe}')"
+                >
+                  ${safe}
+                </button>
+                <button
+                  class="btn-process saved-action"
+                  style="background-color: #cc0033;"
+                  onclick="deleteSaved('${safe}')"
+                >
+                  Delete
+                </button>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function connectSaved(ssid) {
+        const error = document.getElementById("saved-error");
+        if (error) error.textContent = "";
+
+        disableSavedControls(true);
+        fetch("/saved/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ssid }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data && data.success) {
+              successPage(ssid);
+            } else if (error) {
+              error.textContent = `Could not connect to ${ssid}.`;
+            }
+          })
+          .catch(() => {
+            if (error) error.textContent = "Connection failed.";
+          })
+          .finally(() => disableSavedControls(false));
+      }
+
+      function deleteSaved(ssid) {
+        const error = document.getElementById("saved-error");
+        if (error) error.textContent = "";
+
+        disableSavedControls(true);
+        fetch("/saved/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ssid }),
+        })
+          .then((response) => response.json())
+          .then(() => loadSavedNetworks())
+          .catch(() => {
+            if (error) error.textContent = "Delete failed.";
+          })
+          .finally(() => disableSavedControls(false));
+      }
+
+      function clearSavedNetworks() {
+        const error = document.getElementById("saved-error");
+        if (error) error.textContent = "";
+
+        disableSavedControls(true);
+        fetch("/saved/clear", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        })
+          .then((response) => response.json())
+          .then(() => loadSavedNetworks())
+          .catch(() => {
+            if (error) error.textContent = "Clear failed.";
+          })
+          .finally(() => disableSavedControls(false));
+      }
 
       function updateValue(e) {
         showError(e.target.id, "", false);
@@ -904,6 +1087,8 @@ static constexpr const char index_html13[] PROGMEM =
         let linkstate;
         state ? (linkstate = "none") : (linkstate = "");
         document.getElementById("factorylink").style.pointerEvents = linkstate;
+        const savedLink = document.getElementById("savedlink");
+        if (savedLink) savedLink.style.pointerEvents = linkstate;
       }
 
       function connectingState(state) {
@@ -924,8 +1109,8 @@ static constexpr const char index_html13[] PROGMEM =
         const card = document.getElementById("main-card");
         card.innerHTML = `
                <div id="factory-reset-section">
-                 <h3 style="padding-top: 1rem; margin: 0rem;">Factory Reset</h3>
-                 <p>Are you sure you want to reset the device to factory settings?</p>
+                 <h3 style="padding-top: 1rem; margin: 0rem;">Clear saved networks</h3>
+                 <p>Are you sure you want to clear all saved networks?</p>
                  <p style="color: gray; margin-top: 1rem;">${reset_confirmation_text}</p>
                  <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 1.5rem;">
                     <button
@@ -941,7 +1126,7 @@ static constexpr const char index_html13[] PROGMEM =
                       class="btn-process"
                       onclick="startFactoryReset();"
                       >
-                      Reset <span id="connecting-ring" style="display: none;"></span>
+                      Clear <span id="connecting-ring" style="display: none;"></span>
                     </button>
                  </div>
                  <p id="reset-feedback" class="error-message"></p>
@@ -965,7 +1150,7 @@ static constexpr const char index_html13[] PROGMEM =
           "factory-reset-section"
         );
 
-        resetButton.innerHTML = `Resetting<span id="connecting-ring"></span>`;
+        resetButton.innerHTML = `Clearing<span id="connecting-ring"></span>`;
 
         fetch("/factoryreset", {
           method: "POST",
@@ -983,8 +1168,8 @@ static constexpr const char index_html13[] PROGMEM =
                    </svg>
                  </div>
                  <div class="container" style="padding: 1rem;">
-                   <h2 style="color:#7ac142;word-break: break-word;">Reset Success</h2>
-                   <p style="color: gray;word-break: break-word;font-size:1.2rem;margin-bottom: 0.5rem;">Factory reset was successful.</p>
+                   <h2 style="color:#7ac142;word-break: break-word;">Clear Success</h2>
+                   <p style="color: gray;word-break: break-word;font-size:1.2rem;margin-bottom: 0.5rem;">Saved networks were cleared.</p>
                    <p style="opacity: 0.5;">Redirecting to the homepage in a few seconds...</p>
                  </div>
                `;

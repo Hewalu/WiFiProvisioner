@@ -52,6 +52,7 @@ public:
   using SuccessCallback =
       std::function<void(const char *, const char *, const char *)>;
   using FactoryResetCallback = std::function<void()>;
+  using ServerSetupCallback = std::function<void(WebServer *)>;
 
   explicit WiFiProvisioner(const Config &config = Config());
   ~WiFiProvisioner();
@@ -60,9 +61,12 @@ public:
 
   bool startProvisioning();
 
+  void requestStop();
+
   WiFiProvisioner &onProvision(ProvisionCallback callback);
   WiFiProvisioner &onInputCheck(InputCheckCallback callback);
   WiFiProvisioner &onFactoryReset(FactoryResetCallback callback);
+  WiFiProvisioner &onServerStart(ServerSetupCallback callback);
   WiFiProvisioner &onSuccess(SuccessCallback callback);
 
 private:
@@ -81,6 +85,7 @@ private:
   InputCheckCallback inputCheckCallback;
   SuccessCallback onSuccessCallback;
   FactoryResetCallback factoryResetCallback;
+  ServerSetupCallback serverSetupCallback;
 
   Config _config;
   WebServer *_server;

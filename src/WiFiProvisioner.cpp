@@ -13,128 +13,145 @@
 #define WIFI_PROVISIONER_DEBUG // Comment to hide debug prints
 
 #ifdef WIFI_PROVISIONER_DEBUG
-#define WIFI_PROVISIONER_DEBUG_LOG(level, format, ...)                         \
-  do {                                                                         \
-    if (level >= WIFI_PROVISIONER_LOG_INFO) {                                  \
-      Serial.printf("[%s] " format "\n",                                       \
-                    (level == WIFI_PROVISIONER_LOG_DEBUG)  ? "DEBUG"           \
-                    : (level == WIFI_PROVISIONER_LOG_INFO) ? "INFO"            \
-                    : (level == WIFI_PROVISIONER_LOG_WARN) ? "WARN"            \
-                                                           : "ERROR",          \
-                    ##__VA_ARGS__);                                            \
-    }                                                                          \
+#define WIFI_PROVISIONER_DEBUG_LOG(level, format, ...)                \
+  do                                                                  \
+  {                                                                   \
+    if (level >= WIFI_PROVISIONER_LOG_INFO)                           \
+    {                                                                 \
+      Serial.printf("[%s] " format "\n",                              \
+                    (level == WIFI_PROVISIONER_LOG_DEBUG)  ? "DEBUG"  \
+                    : (level == WIFI_PROVISIONER_LOG_INFO) ? "INFO"   \
+                    : (level == WIFI_PROVISIONER_LOG_WARN) ? "WARN"   \
+                                                           : "ERROR", \
+                    ##__VA_ARGS__);                                   \
+    }                                                                 \
   } while (0)
 #else
-#define WIFI_PROVISIONER_DEBUG_LOG(level, format, ...)                         \
-  do {                                                                         \
+#define WIFI_PROVISIONER_DEBUG_LOG(level, format, ...) \
+  do                                                   \
+  {                                                    \
   } while (0) // Empty macro
 #endif
 
-namespace {
+namespace
+{
 
-/**
- * @brief Converts a Received Signal Strength Indicator (RSSI) value to a signal
- * strength level.
- *
- * This function maps RSSI values to a step level ranging from 0 to 4 based on
- * predefined minimum and maximum RSSI thresholds. The returned level provides
- * an approximation of the signal quality.
- *
- * @param rssi The RSSI value (in dBm) representing the signal strength
- * of a Wi-Fi network.
- *
- * @return An integer in the range [0, 4], where 0 indicates very poor signal
- * strength and 4 indicates excellent signal strength.
- */
-int convertRRSItoLevel(int rssi) {
-  //  Convert RSSI to 0 - 4 Step level
-  int numlevels = 4;
-  int MIN_RSSI = -100;
-  int MAX_RSSI = -55;
+  /**
+   * @brief Converts a Received Signal Strength Indicator (RSSI) value to a signal
+   * strength level.
+   *
+   * This function maps RSSI values to a step level ranging from 0 to 4 based on
+   * predefined minimum and maximum RSSI thresholds. The returned level provides
+   * an approximation of the signal quality.
+   *
+   * @param rssi The RSSI value (in dBm) representing the signal strength
+   * of a Wi-Fi network.
+   *
+   * @return An integer in the range [0, 4], where 0 indicates very poor signal
+   * strength and 4 indicates excellent signal strength.
+   */
+  int convertRRSItoLevel(int rssi)
+  {
+    //  Convert RSSI to 0 - 4 Step level
+    int numlevels = 4;
+    int MIN_RSSI = -100;
+    int MAX_RSSI = -55;
 
-  if (rssi < MIN_RSSI) {
-    return 0;
-  } else if (rssi >= MAX_RSSI) {
-    return numlevels;
-  } else {
-    int inputRange = MAX_RSSI - MIN_RSSI;
-    int res = std::ceil((rssi - MIN_RSSI) * numlevels / inputRange);
-    if (res == 0) {
-      return 1;
-    } else {
-      return res;
+    if (rssi < MIN_RSSI)
+    {
+      return 0;
+    }
+    else if (rssi >= MAX_RSSI)
+    {
+      return numlevels;
+    }
+    else
+    {
+      int inputRange = MAX_RSSI - MIN_RSSI;
+      int res = std::ceil((rssi - MIN_RSSI) * numlevels / inputRange);
+      if (res == 0)
+      {
+        return 1;
+      }
+      else
+      {
+        return res;
+      }
     }
   }
-}
 
-/**
- * @brief Scans for available Wi-Fi networks and populates a JSON document with
- * the results.
- *
- * This function performs a Wi-Fi network scan, collecting information about
- * each detected network, including its SSID, signal strength (converted to a
- * level), and authentication mode. The results are stored in the provided `doc`
- * JSON document under the "network" array.
- *
- * @param doc A reference to a `JsonDocument` object where the scan results will
- * be stored. The document will contain an array of networks, each represented
- * as a JSON object with the following keys:
- *
- *            - `ssid`: The network SSID (string).
- *
- *            - `rssi`: The signal strength level (integer, 0 to 4).
- *
- *            - `authmode`: The authentication mode (0 for open, 1 for secured).
- */
-void networkScan(JsonDocument &doc) {
-  JsonArray networks = doc["network"].to<JsonArray>();
+  /**
+   * @brief Scans for available Wi-Fi networks and populates a JSON document with
+   * the results.
+   *
+   * This function performs a Wi-Fi network scan, collecting information about
+   * each detected network, including its SSID, signal strength (converted to a
+   * level), and authentication mode. The results are stored in the provided `doc`
+   * JSON document under the "network" array.
+   *
+   * @param doc A reference to a `JsonDocument` object where the scan results will
+   * be stored. The document will contain an array of networks, each represented
+   * as a JSON object with the following keys:
+   *
+   *            - `ssid`: The network SSID (string).
+   *
+   *            - `rssi`: The signal strength level (integer, 0 to 4).
+   *
+   *            - `authmode`: The authentication mode (0 for open, 1 for secured).
+   */
+  void networkScan(JsonDocument &doc)
+  {
+    JsonArray networks = doc["network"].to<JsonArray>();
 
-  WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
-                             "Starting Network Scan...");
-  int n = WiFi.scanNetworks(false, false);
-  if (n) {
-    for (int i = 0; i < n; ++i) {
-      JsonObject network = networks.add<JsonObject>();
-      network["rssi"] = convertRRSItoLevel(WiFi.RSSI(i));
-      network["ssid"] = WiFi.SSID(i);
-      network["authmode"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? 0 : 1;
+    WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
+                               "Starting Network Scan...");
+    int n = WiFi.scanNetworks(false, false);
+    if (n)
+    {
+      for (int i = 0; i < n; ++i)
+      {
+        JsonObject network = networks.add<JsonObject>();
+        network["rssi"] = convertRRSItoLevel(WiFi.RSSI(i));
+        network["ssid"] = WiFi.SSID(i);
+        network["authmode"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? 0 : 1;
+      }
     }
+    WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
+                               "Network scan complete");
   }
-  WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
-                             "Network scan complete");
-}
 
-/**
- * @brief Sends an HTTP header response to the client.
- *
- * This function constructs and sends the HTTP response header to the connected
- * client, specifying the HTTP status code, content type, and content length.
- *
- * @param client A reference to the `WiFiClient` object representing the
- * connected client.
- * @param statusCode The HTTP status code (e.g., 200 for success, 404 for not
- * found).
- * @param contentType The MIME type of the content (e.g., "text/html",
- * "application/json").
- * @param contentLength The size of the content in bytes to be sent in the
- * response.
- */
-void sendHeader(WiFiClient &client, int statusCode, const char *contentType,
-                size_t contentLength) {
-  client.print("HTTP/1.0 ");
-  client.print(statusCode);
-  client.println(" OK");
+  /**
+   * @brief Sends an HTTP header response to the client.
+   *
+   * This function constructs and sends the HTTP response header to the connected
+   * client, specifying the HTTP status code, content type, and content length.
+   *
+   * @param client A reference to the `WiFiClient` object representing the
+   * connected client.
+   * @param statusCode The HTTP status code (e.g., 200 for success, 404 for not
+   * found).
+   * @param contentType The MIME type of the content (e.g., "text/html",
+   * "application/json").
+   * @param contentLength The size of the content in bytes to be sent in the
+   * response.
+   */
+  void sendHeader(WiFiClient &client, int statusCode, const char *contentType,
+                  size_t contentLength)
+  {
+    client.print("HTTP/1.0 ");
+    client.print(statusCode);
+    client.println(" OK");
 
-  client.print("Content-Type: ");
-  client.println(contentType);
+    client.print("Content-Type: ");
+    client.println(contentType);
 
-  client.print("Content-Length: ");
-  client.println(contentLength);
+    client.print("Content-Length: ");
+    client.println(contentLength);
 
-  client.println("Connection: close");
+    client.println("Connection: close");
 
-  client.println();
-}
+    client.println();
+  }
 
 } // namespace
 
@@ -308,11 +325,13 @@ WiFiProvisioner::Config &WiFiProvisioner::getConfig() { return _config; }
  * `WIFI_STA`. It is called to clean up resources once the provisioning process
  * is complete or aborted.
  */
-void WiFiProvisioner::releaseResources() {
+void WiFiProvisioner::releaseResources()
+{
   _serverLoopFlag = false;
 
   // Webserver
-  if (_server != nullptr) {
+  if (_server != nullptr)
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO, "Stopping server");
     _server->stop();
     delete _server;
@@ -320,7 +339,8 @@ void WiFiProvisioner::releaseResources() {
   }
 
   // DNS
-  if (_dnsServer != nullptr) {
+  if (_dnsServer != nullptr)
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
                                "Stopping DNS server");
     _dnsServer->stop();
@@ -329,7 +349,8 @@ void WiFiProvisioner::releaseResources() {
   }
 
   // WiFi
-  if (WiFi.getMode() != WIFI_STA) {
+  if (WiFi.getMode() != WIFI_STA)
+  {
     WiFi.mode(WIFI_STA);
     delay(_wifiDelay);
   }
@@ -363,7 +384,8 @@ void WiFiProvisioner::releaseResources() {
  * - The `Config` object within the `WiFiProvisioner` is used to customize the
  * behavior and appearance of the provisioning system.
  */
-bool WiFiProvisioner::startProvisioning() {
+bool WiFiProvisioner::startProvisioning()
+{
   WiFi.disconnect(false, true);
   delay(_wifiDelay);
 
@@ -372,19 +394,22 @@ bool WiFiProvisioner::startProvisioning() {
   _server = new WebServer(_serverPort);
   _dnsServer = new DNSServer();
 
-  if (!WiFi.mode(WIFI_AP_STA)) {
+  if (!WiFi.mode(WIFI_AP_STA))
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_ERROR,
                                "Failed to switch to AP+STA mode");
     return false;
   }
   delay(_wifiDelay);
 
-  if (!WiFi.softAPConfig(_apIP, _apIP, _netMsk)) {
+  if (!WiFi.softAPConfig(_apIP, _apIP, _netMsk))
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_ERROR,
                                "Failed to configure AP IP settings");
     return false;
   }
-  if (!WiFi.softAP(_config.AP_NAME)) {
+  if (!WiFi.softAP(_config.AP_NAME))
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_ERROR,
                                "Failed to start Access Point");
     return false;
@@ -392,21 +417,34 @@ bool WiFiProvisioner::startProvisioning() {
   delay(_wifiDelay);
 
   _dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
-  if (!_dnsServer->start(_dnsPort, "*", _apIP)) {
+  if (!_dnsServer->start(_dnsPort, "*", _apIP))
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_ERROR,
                                "Failed to start DNS server");
     return false;
   }
 
-  _server->on("/", [this]() { this->handleRootRequest(); });
+  _server->on("/", [this]()
+              { this->handleRootRequest(); });
   _server->on("/configure", HTTP_POST,
-              [this]() { this->handleConfigureRequest(); });
-  _server->on("/update", [this]() { this->handleUpdateRequest(); });
-  _server->on("/generate_204", [this]() { this->handleRootRequest(); });
-  _server->on("/fwlink", [this]() { this->handleRootRequest(); });
+              [this]()
+              { this->handleConfigureRequest(); });
+  _server->on("/update", [this]()
+              { this->handleUpdateRequest(); });
+  _server->on("/generate_204", [this]()
+              { this->handleRootRequest(); });
+  _server->on("/fwlink", [this]()
+              { this->handleRootRequest(); });
   _server->on("/factoryreset", HTTP_POST,
-              [this]() { this->handleResetRequest(); });
-  _server->onNotFound([this]() { this->handleRootRequest(); });
+              [this]()
+              { this->handleResetRequest(); });
+  _server->onNotFound([this]()
+                      { this->handleRootRequest(); });
+
+  if (serverSetupCallback)
+  {
+    serverSetupCallback(_server);
+  }
 
   _server->begin();
   WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
@@ -416,6 +454,8 @@ bool WiFiProvisioner::startProvisioning() {
   loop();
   return true;
 }
+
+void WiFiProvisioner::requestStop() { _serverLoopFlag = true; }
 
 /**
  * @brief Handles the main loop for the Wi-Fi provisioning process.
@@ -428,15 +468,19 @@ bool WiFiProvisioner::startProvisioning() {
  * The loop runs until the `_serverLoopFlag` is set to `true`, indicating that
  * provisioning is complete or the server needs to shut down.
  */
-void WiFiProvisioner::loop() {
-  while (!_serverLoopFlag) {
+void WiFiProvisioner::loop()
+{
+  while (!_serverLoopFlag)
+  {
     // DNS
-    if (_dnsServer) {
+    if (_dnsServer)
+    {
       _dnsServer->processNextRequest();
     }
 
     // HTTP
-    if (_server) {
+    if (_server)
+    {
       _server->handleClient();
     }
   }
@@ -467,7 +511,8 @@ void WiFiProvisioner::loop() {
  * });
  * ```
  */
-WiFiProvisioner &WiFiProvisioner::onProvision(ProvisionCallback callback) {
+WiFiProvisioner &WiFiProvisioner::onProvision(ProvisionCallback callback)
+{
   provisionCallback = std::move(callback);
   return *this;
 }
@@ -492,7 +537,8 @@ WiFiProvisioner &WiFiProvisioner::onProvision(ProvisionCallback callback) {
  * });
  * ```
  */
-WiFiProvisioner &WiFiProvisioner::onInputCheck(InputCheckCallback callback) {
+WiFiProvisioner &WiFiProvisioner::onInputCheck(InputCheckCallback callback)
+{
   inputCheckCallback = std::move(callback);
   return *this;
 }
@@ -518,8 +564,15 @@ WiFiProvisioner &WiFiProvisioner::onInputCheck(InputCheckCallback callback) {
  * ```
  */
 WiFiProvisioner &
-WiFiProvisioner::onFactoryReset(FactoryResetCallback callback) {
+WiFiProvisioner::onFactoryReset(FactoryResetCallback callback)
+{
   factoryResetCallback = std::move(callback);
+  return *this;
+}
+
+WiFiProvisioner &WiFiProvisioner::onServerStart(ServerSetupCallback callback)
+{
+  serverSetupCallback = std::move(callback);
   return *this;
 }
 
@@ -559,7 +612,8 @@ WiFiProvisioner::onFactoryReset(FactoryResetCallback callback) {
  * });
  * ```
  */
-WiFiProvisioner &WiFiProvisioner::onSuccess(SuccessCallback callback) {
+WiFiProvisioner &WiFiProvisioner::onSuccess(SuccessCallback callback)
+{
   onSuccessCallback = std::move(callback);
   return *this;
 }
@@ -572,8 +626,10 @@ WiFiProvisioner &WiFiProvisioner::onSuccess(SuccessCallback callback) {
  * Wi-Fi provisioning configuration.
  *
  */
-void WiFiProvisioner::handleRootRequest() {
-  if (provisionCallback) {
+void WiFiProvisioner::handleRootRequest()
+{
+  if (provisionCallback)
+  {
     provisionCallback();
   }
 
@@ -657,7 +713,8 @@ void WiFiProvisioner::handleRootRequest() {
  *   - `0`: Open (no password required)
  *   - `1`: Secured (password required)
  */
-void WiFiProvisioner::handleUpdateRequest() {
+void WiFiProvisioner::handleUpdateRequest()
+{
   JsonDocument doc;
 
   doc["show_code"] = _config.SHOW_INPUT_FIELD;
@@ -700,8 +757,10 @@ void WiFiProvisioner::handleUpdateRequest() {
  * }
  * ```
  */
-void WiFiProvisioner::handleConfigureRequest() {
-  if (!_server->hasArg("plain")) {
+void WiFiProvisioner::handleConfigureRequest()
+{
+  if (!_server->hasArg("plain"))
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_WARN,
                                "No 'plain' argument found in request");
     sendBadRequestResponse();
@@ -710,7 +769,8 @@ void WiFiProvisioner::handleConfigureRequest() {
 
   JsonDocument doc;
   auto error = deserializeJson(doc, _server->arg("plain"));
-  if (error) {
+  if (error)
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_WARN,
                                "JSON parsing failed: %s", error.c_str());
     sendBadRequestResponse();
@@ -726,7 +786,8 @@ void WiFiProvisioner::handleConfigureRequest() {
       ssid_connect ? ssid_connect : "", pass_connect ? pass_connect : "",
       input_connect ? input_connect : "");
 
-  if (!ssid_connect) {
+  if (!ssid_connect)
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_WARN,
                                "SSID missing from request");
     sendBadRequestResponse();
@@ -736,7 +797,8 @@ void WiFiProvisioner::handleConfigureRequest() {
   WiFi.disconnect(false, true);
   delay(_wifiDelay);
 
-  if (!connect(ssid_connect, pass_connect)) {
+  if (!connect(ssid_connect, pass_connect))
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_WARN,
                                "Failed to connect to WiFi: %s with password %s",
                                ssid_connect, pass_connect ? pass_connect : "");
@@ -745,7 +807,8 @@ void WiFiProvisioner::handleConfigureRequest() {
   }
 
   if (input_connect && inputCheckCallback &&
-      !inputCheckCallback(input_connect)) {
+      !inputCheckCallback(input_connect))
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
                                "Input check callback failed.");
     handleUnsuccessfulConnection("code");
@@ -754,7 +817,8 @@ void WiFiProvisioner::handleConfigureRequest() {
 
   handleSuccesfulConnection();
 
-  if (onSuccessCallback) {
+  if (onSuccessCallback)
+  {
     onSuccessCallback(ssid_connect, pass_connect, input_connect);
   }
 
@@ -773,27 +837,34 @@ void WiFiProvisioner::handleConfigureRequest() {
  * empty string for open networks.
  * @return `true` if the connection is successful; `false` otherwise.
  */
-bool WiFiProvisioner::connect(const char *ssid, const char *password) {
+bool WiFiProvisioner::connect(const char *ssid, const char *password)
+{
   WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
                              "Attempting to connect to SSID: %s", ssid);
 
-  if (!ssid || strlen(ssid) == 0) {
+  if (!ssid || strlen(ssid) == 0)
+  {
     WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_ERROR,
                                "Invalid SSID provided");
     return false;
   }
 
-  if (password && strlen(password) > 0) {
+  if (password && strlen(password) > 0)
+  {
     WiFi.begin(ssid, password);
-  } else {
+  }
+  else
+  {
     WiFi.begin(ssid);
   }
 
   unsigned long startTime = millis();
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     delay(_wifiDelay);
 
-    if (millis() - startTime >= _wifiConnectionTimeout) {
+    if (millis() - startTime >= _wifiConnectionTimeout)
+    {
       WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_ERROR,
                                  "WiFi connection timeout reached for SSID: %s",
                                  ssid);
@@ -809,7 +880,8 @@ bool WiFiProvisioner::connect(const char *ssid, const char *password) {
 /**
  * @brief Sends a generic HTTP 400 Bad Request response.
  */
-void WiFiProvisioner::sendBadRequestResponse() {
+void WiFiProvisioner::sendBadRequestResponse()
+{
   WiFiClient client = _server->client();
 
   sendHeader(client, 400, "text/html", 0);
@@ -825,7 +897,8 @@ void WiFiProvisioner::sendBadRequestResponse() {
  * @brief Sends a success response to the HTTP client after a successful Wi-Fi
  * connection.
  */
-void WiFiProvisioner::handleSuccesfulConnection() {
+void WiFiProvisioner::handleSuccesfulConnection()
+{
   JsonDocument doc;
   doc["success"] = true;
 
@@ -844,7 +917,8 @@ void WiFiProvisioner::handleSuccesfulConnection() {
  *
  * @param reason The reason for the failure (e.g., "ssid" or "code").
  */
-void WiFiProvisioner::handleUnsuccessfulConnection(const char *reason) {
+void WiFiProvisioner::handleUnsuccessfulConnection(const char *reason)
+{
   JsonDocument doc;
   doc["success"] = false;
   doc["reason"] = reason;
@@ -868,8 +942,10 @@ void WiFiProvisioner::handleUnsuccessfulConnection(const char *reason) {
  * required reset operations. After the reset, the provisioning UI is displayed
  * again.
  */
-void WiFiProvisioner::handleResetRequest() {
-  if (factoryResetCallback) {
+void WiFiProvisioner::handleResetRequest()
+{
+  if (factoryResetCallback)
+  {
     factoryResetCallback();
   }
   WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
