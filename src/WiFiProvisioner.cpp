@@ -628,63 +628,17 @@ WiFiProvisioner &WiFiProvisioner::onSuccess(SuccessCallback callback)
  */
 void WiFiProvisioner::handleRootRequest()
 {
+  // Deinen Callback behalten wir natürlich, falls dein Hauptprogramm
+  // wissen muss, dass gerade jemand die Webseite aufgerufen hat
   if (provisionCallback)
   {
     provisionCallback();
   }
 
-  const char *showResetField = _config.SHOW_RESET_FIELD ? "true" : "false";
+  WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO, "Sende Svelte Provisioner UI...");
 
-  char inputLengthStr[12];
-  snprintf(inputLengthStr, sizeof(inputLengthStr), "%d", _config.INPUT_LENGTH);
-
-  size_t contentLength =
-      strlen_P(index_html1) + strlen(_config.HTML_TITLE) +
-      strlen_P(index_html2) + strlen(_config.THEME_COLOR) +
-      strlen_P(index_html3) + strlen(_config.SVG_LOGO) + strlen_P(index_html4) +
-      strlen(_config.PROJECT_TITLE) + strlen_P(index_html5) +
-      strlen(_config.PROJECT_SUB_TITLE) + strlen_P(index_html6) +
-      strlen(_config.PROJECT_INFO) + strlen_P(index_html7) +
-      strlen(_config.INPUT_TEXT) + strlen_P(index_html8) +
-      strlen(inputLengthStr) + strlen_P(index_html9) +
-      strlen(_config.CONNECTION_SUCCESSFUL) + strlen_P(index_html10) +
-      strlen(_config.FOOTER_TEXT) + strlen_P(index_html11) +
-      strlen(_config.RESET_CONFIRMATION_TEXT) + strlen_P(index_html12) +
-      strlen(showResetField) + strlen_P(index_html13);
-
-  WIFI_PROVISIONER_DEBUG_LOG(WIFI_PROVISIONER_LOG_INFO,
-                             "Calculated Content Length: %zu", contentLength);
-
-  WiFiClient client = _server->client();
-  sendHeader(client, 200, "text/html", contentLength);
-
-  client.write_P(index_html1, strlen_P(index_html1));
-  client.print(_config.HTML_TITLE);
-  client.write_P(index_html2, strlen_P(index_html2));
-  client.print(_config.THEME_COLOR);
-  client.write_P(index_html3, strlen_P(index_html3));
-  client.print(_config.SVG_LOGO);
-  client.write_P(index_html4, strlen_P(index_html4));
-  client.print(_config.PROJECT_TITLE);
-  client.write_P(index_html5, strlen_P(index_html5));
-  client.print(_config.PROJECT_SUB_TITLE);
-  client.write_P(index_html6, strlen_P(index_html6));
-  client.print(_config.PROJECT_INFO);
-  client.write_P(index_html7, strlen_P(index_html7));
-  client.print(_config.INPUT_TEXT);
-  client.write_P(index_html8, strlen_P(index_html8));
-  client.print(inputLengthStr);
-  client.write_P(index_html9, strlen_P(index_html9));
-  client.print(_config.CONNECTION_SUCCESSFUL);
-  client.write_P(index_html10, strlen_P(index_html10));
-  client.print(_config.FOOTER_TEXT);
-  client.write_P(index_html11, strlen_P(index_html11));
-  client.print(_config.RESET_CONFIRMATION_TEXT);
-  client.write_P(index_html12, strlen_P(index_html12));
-  client.print(showResetField);
-  client.write_P(index_html13, strlen_P(index_html13));
-  client.flush();
-  client.stop();
+  // Die Magie: Wir senden einfach den einen, großen Svelte-Block aus dem PROGMEM
+  _server->send_P(200, "text/html", index_html);
 }
 
 /**
