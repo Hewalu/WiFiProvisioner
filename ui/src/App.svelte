@@ -5,7 +5,17 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import { RefreshCw, Eye, EyeOff, Wifi, CircleCheckBig } from "@lucide/svelte";
+  import {
+    RefreshCw,
+    Eye,
+    EyeOff,
+    Wifi,
+    WifiHigh,
+    WifiLow,
+    WifiZero,
+    Lock,
+    CircleCheckBig,
+  } from "@lucide/svelte";
   import logo from "./assets/logo.svg";
 
   // Unsere externen Komponenten
@@ -28,6 +38,9 @@
   let errorMessage = $state("");
   let isClearDialogOpen = $state(false);
   let isClearing = $state(false);
+  let isSelectedNetworkSecure = $derived(
+    networks.find((n) => n.ssid === selectedSsid)?.authmode !== 0,
+  );
   let clearStatus = $state<"idle" | "success" | "error">("idle");
 
   async function scanNetworks() {
@@ -41,25 +54,25 @@
       let rawNetworks: Network[] = [];
 
       if (isLocalhost) {
-        // Mock-Daten für PC-Test
+        // Mock-Daten mit deinen neuen 1-4 RSSI Werten
         await new Promise((r) => setTimeout(r, 2000));
         rawNetworks = [
           { ssid: "JimKnopfs-Wlan", rssi: 4, authmode: 1 },
-          { ssid: "EK-Palais", rssi: 2, authmode: 1 },
-          { ssid: "FRITZ!Box 7690 PK", rssi: 3, authmode: 1 },
+          { ssid: "EK-Palais", rssi: 3, authmode: 1 },
+          { ssid: "FRITZ!Box 7690 PK", rssi: 4, authmode: 0 },
           { ssid: "Vodafone-1944", rssi: 1, authmode: 1 },
-          { ssid: "JimKnopfs-Wlan", rssi: 1, authmode: 1 },
-          { ssid: "WLAN-120634", rssi: 3, authmode: 0 },
+          { ssid: "JimKnopfs-Wlan", rssi: 2, authmode: 1 }, // Duplikat (schlechterer Empfang)
+          { ssid: "WLAN-120634", rssi: 2, authmode: 1 },
         ];
       } else {
-        // WICHTIG: Hier rufen wir jetzt exakt die Route deines C++ Backends auf!
+        // ECHTER ESP32 FETCH (Endpoint /update)
         const res = await fetch("/update");
-        const jsonBody = await res.json();
+        const json = await res.json();
 
-        rawNetworks = jsonBody.network || [];
-
-        // jsonBody.show_code fangen wir hier zwar ab, aber da wir das Passwortfeld
-        // in deinem Design eh immer anzeigen, brauchen wir damit aktuell nichts machen.
+        // Dein ESP schickt die Liste in "json.network" mit
+        if (json && json.network) {
+          rawNetworks = json.network;
+        }
       }
 
       // 1. Duplikate mergen (nur das Stärkste behalten)
@@ -70,9 +83,10 @@
         }
       }
 
-      // 2. Sortieren (Level 4 zuerst, Level 0 zuletzt)
+      // 2. Sortieren (4 ist am stärksten, also b - a)
       networks = Array.from(merged.values()).sort((a, b) => b.rssi - a.rssi);
 
+      // Erstes Netzwerk automatisch auswählen
       if (networks.length > 0 && !selectedSsid) {
         selectedSsid = networks[0].ssid;
       }
@@ -215,12 +229,25 @@
                       <RadioGroup.Item value={network.ssid} id={network.ssid} />
                       <Label
                         for={network.ssid}
-                        class="text-base font-normal cursor-pointer"
+                        class="text-base font-normal cursor-pointer flex items-center gap-2"
                       >
                         {network.ssid}
+
+                        {#if network.authmode === 1}
+                          <Lock class="w-3.5 h-3.5 text-slate-400" />
+                        {/if}
                       </Label>
                     </div>
-                    <Wifi class="w-5 h-5 text-slate-700" />
+
+                    {#if network.rssi >= 4}
+                      <Wifi class="w-5 h-5 text-slate-700" />
+                    {:else if network.rssi === 3}
+                      <WifiHigh class="w-5 h-5 text-slate-700" />
+                    {:else if network.rssi === 2}
+                      <WifiLow class="w-5 h-5 text-slate-700" />
+                    {:else}
+                      <WifiZero class="w-5 h-5 text-slate-700" />
+                    {/if}
                   </div>
                 {/each}
 
